@@ -1,0 +1,1 @@
+/usr/bin/c++ -g CMakeFiles/wSender.dir/wSender.cpp.o -o ../../bin/wSender  ../../_deps/spdlog-build/libspdlogd.a /usr/lib/x86_64-linux-gnu/libboost_regex.so.1.83.0 

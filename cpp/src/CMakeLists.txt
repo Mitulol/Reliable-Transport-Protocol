@@ -10,3 +10,24 @@
 #   wSenderOpt
 #   wReceiverOpt
 
+
+# Add the common directory for shared headers
+include_directories(${CMAKE_CURRENT_SOURCE_DIR}/common)
+
+# Build wSender
+add_executable(wSender wSender.cpp)
+target_link_libraries(wSender PRIVATE spdlog::spdlog cxxopts::cxxopts Boost::regex)
+
+# Build wReceiver
+add_executable(wReceiver wReceiver.cpp)
+target_link_libraries(wReceiver PRIVATE spdlog::spdlog cxxopts::cxxopts Boost::regex)
+
+# Build wSenderOpt (stub for now)
+add_executable(wSenderOpt wSenderOpt.cpp)
+target_link_libraries(wSenderOpt PRIVATE spdlog::spdlog cxxopts::cxxopts Boost::regex)
+
+# Build wReceiverOpt (stub for now)
+add_executable(wReceiverOpt wReceiverOpt.cpp)
+target_link_libraries(wReceiverOpt PRIVATE spdlog::spdlog cxxopts::cxxopts Boost::regex)
+
+
