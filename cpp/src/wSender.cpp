@@ -201,7 +201,7 @@ int main(int argc, char* argv[]) {
                 (struct sockaddr*)&receiverAddr, sizeof(receiverAddr));
 
             spdlog::debug("Sent DATA packet: type = {}, seqNum = {}, length = {}, checkSum = {} ", 
-                header.type, header.seqNum, header.length, header.checksum);
+                ntohl(header.type), ntohl(header.seqNum), ntohl(header.length), ntohl(header.checksum));
             logPacket(logFile, header);
 
             // Store for retransmission
@@ -243,7 +243,7 @@ int main(int argc, char* argv[]) {
                         }
                         baseSeqNum = ackNum;
                         ackMovedWindow = true;
-                        nextSeqNum = baseSeqNum;
+                        // nextSeqNum = baseSeqNum;
                     }
                 }
             }
@@ -263,7 +263,7 @@ int main(int argc, char* argv[]) {
                     (struct sockaddr*)&receiverAddr, sizeof(receiverAddr));
 
                 spdlog::debug("Sent DATA packet: type = {}, seqNum = {}, length = {}, checkSum = {} ", 
-                    header.type, header.seqNum, header.length, header.checksum);
+                    ntohl(header.type), ntohl(header.seqNum), ntohl(header.length), ntohl(header.checksum));
                 logPacket(logFile, header);
                 spdlog::debug("Retransmitted packet {}", seq);
             }

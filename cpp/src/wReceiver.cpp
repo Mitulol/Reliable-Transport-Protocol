@@ -81,6 +81,8 @@ int main(int argc, char* argv[]) {
     // Initialize buffer if needed
     std::map<uint32_t, std::vector<char>> bufferMap;
 
+    std::ofstream outputFile;
+
     while (true) {
         ssize_t len = recvfrom(sockfd, buffer, MAX_PACKET_SIZE, 0,
                                (struct sockaddr*)&activeSender, &senderLen);
@@ -103,6 +105,13 @@ int main(int argc, char* argv[]) {
                 // Save sender info
                 inConnection = true;
                 expectedSeqNum = 0;
+
+                std::string filename = outputDir + "/FILE-" + std::to_string(fileIndex++) + ".out";
+                outputFile.open(filename, std::ios::binary);
+                if (!outputFile) {
+                    std::cerr << "Failed to open output file\n";
+                    return 1;
+                }
 
                 // Send ACK for START
                 PacketHeader ack{};
@@ -175,6 +184,10 @@ int main(int argc, char* argv[]) {
         
             // Slide window forward
             while (bufferMap.find(expectedSeqNum) != bufferMap.end()) {
+                if (outputFile.is_open()) {
+                    outputFile.write(bufferMap[expectedSeqNum].data(), bufferMap[expectedSeqNum].size());
+                }
+                bufferMap.erase(expectedSeqNum); 
                 ++expectedSeqNum;
             }
         
@@ -199,24 +212,39 @@ int main(int argc, char* argv[]) {
         
             logPacket(logFile, header);
         
-            // Only accept END if all packets up to expectedSeqNum have been received
-            if (!bufferMap.empty() && bufferMap.begin()->first != 0) {
-                spdlog::debug("Rejecting END: Missing earlier packets");
-                continue;
+            // // Only accept END if all packets up to expectedSeqNum have been received
+            // if (!bufferMap.empty() && bufferMap.begin()->first != 0) {
+            //     spdlog::debug("Rejecting END: Missing earlier packets");
+            //     continue;
+            // }
+
+            // spdlog::debug("Wrote file to disk (ongoing). Remaining buffered: {}", bufferMap.size());
+            spdlog::debug("Finalizing file write. Remaining buffered: {}", bufferMap.size());
+
+
+            // Write any remaining packets to disk
+            for (uint32_t i = expectedSeqNum; bufferMap.find(i) != bufferMap.end(); ++i) {
+                outputFile.write(bufferMap[i].data(), bufferMap[i].size());
+                bufferMap.erase(i);
+            }
+
+            outputFile.close();
+            if (outputFile.fail()) {
+                spdlog::error("Failed to write full file to disk");
             }
         
-            // Write buffered data to disk
-            std::string filename = outputDir + "/FILE-" + std::to_string(fileIndex++) + ".out";
-            std::ofstream outputFile(filename, std::ios::binary);
-            for (uint32_t i = 0; i < expectedSeqNum; ++i) {
-                if (bufferMap.find(i) != bufferMap.end()) {
-                    outputFile.write(bufferMap[i].data(), bufferMap[i].size());
-                } else {
-                    spdlog::warn("Missing packet {} during file write", i);
-                }
-            }
-            outputFile.close();
-            spdlog::debug("Wrote received file to {}", filename);
+            // // Write buffered data to disk
+            // std::string filename = outputDir + "/FILE-" + std::to_string(fileIndex++) + ".out";
+            // std::ofstream outputFile(filename, std::ios::binary);
+            // for (uint32_t i = 0; i < expectedSeqNum; ++i) {
+            //     if (bufferMap.find(i) != bufferMap.end()) {
+            //         outputFile.write(bufferMap[i].data(), bufferMap[i].size());
+            //     } else {
+            //         spdlog::warn("Missing packet {} during file write", i);
+            //     }
+            // }
+            // outputFile.close();
+            // spdlog::debug("Wrote received file to {}", filename);
         
             // Send ACK for END
             PacketHeader ack{};
