@@ -87,13 +87,18 @@ int main(int argc, char* argv[]) {
 
         if (len < sizeof(PacketHeader)) continue;
 
-        PacketHeader* header = reinterpret_cast<PacketHeader*>(buffer);
+        PacketHeader* rawHeader = reinterpret_cast<PacketHeader*>(buffer);
+        PacketHeader header;
+        header.type = ntohl(rawHeader->type);
+        header.seqNum = ntohl(rawHeader->seqNum);
+        header.length = ntohl(rawHeader->length);
+        header.checksum = ntohl(rawHeader->checksum);
         
 
-        if (header->type == 0) {  // START packet
+        if (header.type == 0) {  // START packet
             if (!inConnection) {
-                spdlog::debug("Received START packet with seqNum {}", header->seqNum);
-                logPacket(logFile, *header);
+                spdlog::debug("Received START packet with seqNum {}", header.seqNum);
+                logPacket(logFile, header);
 
                 // Save sender info
                 inConnection = true;
@@ -101,10 +106,10 @@ int main(int argc, char* argv[]) {
 
                 // Send ACK for START
                 PacketHeader ack{};
-                ack.type = 3; // ACK
-                ack.seqNum = header->seqNum;
-                ack.length = 0;
-                ack.checksum = 0;
+                ack.type = htonl(3);
+                ack.seqNum = htonl(header.seqNum);
+                ack.length = htonl(0);
+                ack.checksum = htonl(0);
 
                 sendto(sockfd, &ack, sizeof(ack), 0,
                     (struct sockaddr*)&activeSender, senderLen);
@@ -117,31 +122,31 @@ int main(int argc, char* argv[]) {
         }
 
         // Handle DATA
-        else if (header->type == 2 && inConnection) {  // DATA packet
+        else if (header.type == 2 && inConnection) {  // DATA packet
             // Check checksum over data portion
-            size_t dataLen = header->length;
+            size_t dataLen = header.length;
             if (len != sizeof(PacketHeader) + dataLen) continue;  // malformed, drop
         
             uint32_t calcChecksum = crc32(reinterpret_cast<uint8_t*>(buffer + sizeof(PacketHeader)), dataLen);
-            if (calcChecksum != header->checksum) {
-                spdlog::debug("Dropped DATA seqNum {} due to checksum mismatch", header->seqNum);
+            if (calcChecksum != header.checksum) {
+                spdlog::debug("Dropped DATA seqNum {} due to checksum mismatch", header.seqNum);
                 continue;  // Drop malformed packet, do not ACK or log
             }
 
             spdlog::debug("Received DATA packet: type = {}, seqNum = {}, length = {}, checkSum = {} ", 
-                header->type, header->seqNum, header->length, header->checksum);
-            logPacket(logFile, *header);
+                header.type, header.seqNum, header.length, header.checksum);
+            logPacket(logFile, header);
         
-            uint32_t seqNum = header->seqNum;
+            uint32_t seqNum = header.seqNum;
 
             if (seqNum < expectedSeqNum) {
                 spdlog::debug("Duplicate DATA seqNum {}, re-ACKing {}", seqNum, expectedSeqNum);
                 
                 PacketHeader ack{};
-                ack.type = 3;
-                ack.seqNum = expectedSeqNum;
-                ack.length = 0;
-                ack.checksum = 0;
+                ack.type = htonl(3);
+                ack.seqNum = htonl(expectedSeqNum);
+                ack.length = htonl(0);
+                ack.checksum = htonl(0);
                 sendto(sockfd, &ack, sizeof(ack), 0, (struct sockaddr*)&activeSender, senderLen);
                 spdlog::debug("Sent ACK packet: type = {}, seqNum = {}, length = {}, checkSum = {} ", 
                     ack.type, ack.seqNum, ack.length, ack.checksum);
@@ -152,10 +157,10 @@ int main(int argc, char* argv[]) {
             // Outside window: drop and ACK expectedSeqNum
             if (seqNum >= expectedSeqNum + windowSize) {
                 PacketHeader ack{};
-                ack.type = 3;
-                ack.seqNum = expectedSeqNum;
-                ack.length = 0;
-                ack.checksum = 0;
+                ack.type = htonl(3);
+                ack.seqNum = htonl(expectedSeqNum);
+                ack.length = htonl(0);
+                ack.checksum = htonl(0);
                 sendto(sockfd, &ack, sizeof(ack), 0, (struct sockaddr*)&activeSender, senderLen);
                 logPacket(logFile, ack);
                 spdlog::debug("Dropped DATA seqNum {} outside window, sent ACK {}", seqNum, expectedSeqNum);
@@ -175,24 +180,24 @@ int main(int argc, char* argv[]) {
         
             // Send ACK
             PacketHeader ack{};
-            ack.type = 3;
-            ack.seqNum = expectedSeqNum;
-            ack.length = 0;
-            ack.checksum = 0;
+            ack.type = htonl(3);
+            ack.seqNum = htonl(expectedSeqNum);
+            ack.length = htonl(0);
+            ack.checksum = htonl(0);
             sendto(sockfd, &ack, sizeof(ack), 0, (struct sockaddr*)&activeSender, senderLen);
             logPacket(logFile, ack);
             spdlog::debug("Sent cumulative ACK {}", expectedSeqNum);
         }
 
         // Handle END Packet
-        else if (header->type == 1 && inConnection) {  // END packet
+        else if (header.type == 1 && inConnection) {  // END packet
             uint32_t calcChecksum = crc32(nullptr, 0);  // No data to check
-            if (calcChecksum != header->checksum) {
+            if (calcChecksum != header.checksum) {
                 spdlog::debug("Dropped END packet due to checksum mismatch");
                 continue;
             }
         
-            logPacket(logFile, *header);
+            logPacket(logFile, header);
         
             // Only accept END if all packets up to expectedSeqNum have been received
             if (!bufferMap.empty() && bufferMap.begin()->first != 0) {
@@ -215,10 +220,10 @@ int main(int argc, char* argv[]) {
         
             // Send ACK for END
             PacketHeader ack{};
-            ack.type = 3;
-            ack.seqNum = header->seqNum;
-            ack.length = 0;
-            ack.checksum = 0;
+            ack.type = htonl(3);
+            ack.seqNum = htonl(header.seqNum);
+            ack.length = htonl(0);
+            ack.checksum = htonl(0);
             sendto(sockfd, &ack, sizeof(ack), 0, (struct sockaddr*)&activeSender, senderLen);
             logPacket(logFile, ack);
             spdlog::debug("ACKed END packet, resetting receiver state");

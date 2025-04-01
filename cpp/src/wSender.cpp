@@ -37,7 +37,7 @@ std::vector<std::vector<char>> readChunks(const std::string &inputFile) {
 }
 
 void logPacket(std::ofstream& log, const PacketHeader& header) {
-    log << header.type << " " << header.seqNum << " " << header.length << " " << header.checksum << "\n";
+    log << ntohl(header.type) << " " << ntohl(header.seqNum) << " " << ntohl(header.length) << " " << ntohl(header.checksum) << "\n";
     log.flush();
 }
 
@@ -109,10 +109,10 @@ int main(int argc, char* argv[]) {
     uint32_t startSeqNum = rand(); // Random initial sequence number
 
     PacketHeader startHeader;
-    startHeader.type = 0; // START
-    startHeader.seqNum = startSeqNum;
-    startHeader.length = 0;
-    startHeader.checksum = 0;
+    startHeader.type = htonl(0); // START
+    startHeader.seqNum = htonl(startSeqNum);
+    startHeader.length = htonl(0);
+    startHeader.checksum = htonl(0);
 
     bool ackReceived = false;
     char recvBuffer[MAX_PACKET_SIZE];
@@ -144,14 +144,14 @@ int main(int argc, char* argv[]) {
 
             if (recvLen >= sizeof(PacketHeader)) {
                 PacketHeader* ack = reinterpret_cast<PacketHeader*>(recvBuffer);
-                if (ack->type == 3 && ack->seqNum == startSeqNum) {
+                if (ntohl(ack->type) == 3 && ntohl(ack->seqNum) == startSeqNum) {
                     // spdlog::debug("{} {} {} {}", ack->type, ack->seqNum, ack->length, ack->checksum);
                     logPacket(logFile, *ack);
                     spdlog::debug("Received ACK for START packet.");
                     ackReceived = true;
                     break;
                 } else {
-                    spdlog::warn("Received unexpected packet: type = {}, seqNum = {}", ack->type, ack->seqNum);
+                    spdlog::warn("Received unexpected packet: type = {}, seqNum = {}", ntohl(ack->type), ntohl(ack->seqNum));
                 }
             }
         } else {
@@ -181,16 +181,20 @@ int main(int argc, char* argv[]) {
     while (baseSeqNum < chunks.size()) {
         // Step 1: Send as many packets as the window allows
         while (nextSeqNum < baseSeqNum + windowSize && nextSeqNum < chunks.size()) {
+
+            uint32_t payloadLen = chunks[nextSeqNum].size();
+            uint32_t checksum = crc32(reinterpret_cast<uint8_t*>(chunks[nextSeqNum].data()), payloadLen);
+
             PacketHeader header;
-            header.type = 2; // DATA
-            header.seqNum = nextSeqNum;
-            header.length = chunks[nextSeqNum].size();
-            header.checksum = crc32(reinterpret_cast<uint8_t*>(chunks[nextSeqNum].data()), header.length);
+            header.type = htonl(2); // DATA
+            header.seqNum = htonl(nextSeqNum);
+            header.length = htonl(payloadLen);
+            header.checksum = htonl(checksum);
 
             // Create full packet (header + data)
-            std::vector<char> packet(sizeof(PacketHeader) + header.length);
+            std::vector<char> packet(sizeof(PacketHeader) + payloadLen);
             std::memcpy(packet.data(), &header, sizeof(PacketHeader));
-            std::memcpy(packet.data() + sizeof(PacketHeader), chunks[nextSeqNum].data(), header.length);
+            std::memcpy(packet.data() + sizeof(PacketHeader), chunks[nextSeqNum].data(), payloadLen);
 
             // Send packet
             sendto(sockfd, packet.data(), packet.size(), 0,
@@ -224,12 +228,12 @@ int main(int argc, char* argv[]) {
 
             if (ackLen >= sizeof(PacketHeader)) {
                 PacketHeader* ack = reinterpret_cast<PacketHeader*>(ackBuffer);
-                if (ack->type == 3) {
+                if (ntohl(ack->type) == 3) {
                     logPacket(logFile, *ack);
                     spdlog::debug("Received ACK packet: type = {}, seqNum = {}, length = {}, checkSum = {} ", 
-                        ack->type, ack->seqNum, ack->length, ack->checksum);
+                        ntohl(ack->type), ntohl(ack->seqNum), ntohl(ack->length), ntohl(ack->checksum));
 
-                    uint32_t ackNum = ack->seqNum;
+                    uint32_t ackNum = ntohl(ack->seqNum);
 
                     if (ackNum > baseSeqNum) {
                         // Slide window forward
@@ -250,9 +254,10 @@ int main(int argc, char* argv[]) {
             for (auto& [seq, data] : inFlightPackets) {
                 PacketHeader& header = inFlightHeaders[seq];
 
-                std::vector<char> packet(sizeof(PacketHeader) + header.length);
+                uint32_t length = ntohl(header.length);
+                std::vector<char> packet(sizeof(PacketHeader) + length);
                 std::memcpy(packet.data(), &header, sizeof(PacketHeader));
-                std::memcpy(packet.data() + sizeof(PacketHeader), data.data(), header.length);
+                std::memcpy(packet.data() + sizeof(PacketHeader), data.data(), length);
 
                 sendto(sockfd, packet.data(), packet.size(), 0,
                     (struct sockaddr*)&receiverAddr, sizeof(receiverAddr));
@@ -268,10 +273,10 @@ int main(int argc, char* argv[]) {
     uint32_t endSeqNum = startSeqNum;
 
     PacketHeader endHeader;
-    endHeader.type = 1; // END
-    endHeader.seqNum = endSeqNum;
-    endHeader.length = 0;
-    endHeader.checksum = 0;
+    endHeader.type = htonl(1); // END
+    endHeader.seqNum = htonl(endSeqNum);
+    endHeader.length = htonl(0);
+    endHeader.checksum = htonl(0);
 
     ackReceived = false;
 
@@ -294,13 +299,13 @@ int main(int argc, char* argv[]) {
     
             if (recvLen >= sizeof(PacketHeader)) {
                 PacketHeader* ack = reinterpret_cast<PacketHeader*>(recvBuffer);
-                if (ack->type == 3 && ack->seqNum == endSeqNum) {
+                if (ntohl(ack->type) == 3 && ntohl(ack->seqNum) == endSeqNum) {
                     logPacket(logFile, *ack);
                     spdlog::debug("Received ACK for END packet.");
                     ackReceived = true;
                     break;
                 } else {
-                    spdlog::warn("Received unexpected packet: type = {}, seqNum = {}", ack->type, ack->seqNum);
+                    spdlog::warn("Received unexpected packet: type = {}, seqNum = {}", ntohl(ack->type), ntohl(ack->seqNum));
                 }
             }
         } else {
