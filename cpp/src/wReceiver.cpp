@@ -158,7 +158,7 @@ int main(int argc, char* argv[]) {
                 ack.checksum = htonl(0);
                 sendto(sockfd, &ack, sizeof(ack), 0, (struct sockaddr*)&activeSender, senderLen);
                 spdlog::debug("Sent ACK packet: type = {}, seqNum = {}, length = {}, checkSum = {} ", 
-                    ack.type, ack.seqNum, ack.length, ack.checksum);
+                    ntohl(ack.type), ntohl(ack.seqNum), ntohl(ack.length), ntohl(ack.checksum));
                 logPacket(logFile, ack);
                 continue;
             }
