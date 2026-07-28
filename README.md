@@ -20,7 +20,23 @@ The project includes both a **sender** (`wSender`) and a **receiver** (`wReceive
 
 **Corruption handling:** the receiver independently recomputes each packet's checksum; a mismatch causes the packet to be silently dropped (no ACK sent), which naturally triggers the sender's retransmission logic.
 
-**Optimized mode (`wSenderOpt` / `wReceiverOpt`):** the baseline protocol's cumulative ACKs can cause unnecessary retransmission — if packet 0 is lost but 1 and 2 arrive out of order, the receiver can only ACK "waiting on 0," so the sender resends all three. The optimized variant sends individual (non-cumulative) ACKs and tracks per-packet timers on the sender side, so only the actually-missing packet gets retransmitted.
+**Optimized mode (`wSenderOpt` / `wReceiverOpt`):** the baseline protocol's cumulative ACKs can cause unnecessary retransmission. Here's the failure case, with a window size of 3:
+
+Packet 0 is lost in transit, but packets 1 and 2 both arrive safely:
+
+![Sender window holding packets 0, 1, 2; packet 0 is dropped in transit while packets 1 and 2 successfully reach the receiver window](rtp-diagrams/sliding_window_loss.png)
+
+Because baseline `wReceiver` only sends *cumulative* ACKs, it can't say "I got 1 and 2" — every ACK it sends still just says "I'm waiting on 0." The sender sees no forward progress, its timer fires, and it retransmits **all three** packets — even though 1 and 2 already arrived safely.
+
+`wReceiverOpt` fixes this by ACKing packets individually instead of cumulatively:
+
+![Receiver individually ACKs packet 1 and packet 2 with their own sequence numbers, rather than one cumulative ACK](rtp-diagrams/individual_acks.png)
+
+`wSenderOpt` tracks these per-packet ACKs and maintains an independent timer for each packet in the window, so a timeout on packet 0 no longer drags 1 and 2 down with it:
+
+![Sender marks packets 1 and 2 as acknowledged in its buffer and, after its timer expires, retransmits only packet 0](rtp-diagrams/selective_retransmit.png)
+
+The result: only the packet that actually needs it gets resent.
 
 ## Usage
 
