@@ -24,17 +24,17 @@ The project includes both a **sender** (`wSender`) and a **receiver** (`wReceive
 
 Packet 0 is lost in transit, but packets 1 and 2 both arrive safely:
 
-![Sender window holding packets 0, 1, 2; packet 0 is dropped in transit while packets 1 and 2 successfully reach the receiver window](img/base_case.PNG)
+<img src="img/base_case.PNG" alt="Sender window holding packets 0, 1, 2; packet 0 is dropped in transit while packets 1 and 2 successfully reach the receiver window" title="Inefficient transfer of data" width="250" height="250"/>
 
 Because baseline `wReceiver` only sends *cumulative* ACKs, it can't say "I got 1 and 2" — every ACK it sends still just says "I'm waiting on 0." The sender sees no forward progress, its timer fires, and it retransmits **all three** packets — even though 1 and 2 already arrived safely.
 
 `wReceiverOpt` fixes this by ACKing packets individually instead of cumulatively:
 
-![Receiver individually ACKs packet 1 and packet 2 with their own sequence numbers, rather than one cumulative ACK](img/improvement.PNG)
+<img src="img/improvement.PNG" alt="Receiver individually ACKs packet 1 and packet 2 with their own sequence numbers, rather than one cumulative ACK" title="Only ACK necessary data" width="250" height="250"/>
 
 `wSenderOpt` tracks these per-packet ACKs and maintains an independent timer for each packet in the window, so a timeout on packet 0 no longer drags 1 and 2 down with it:
 
-![Sender marks packets 1 and 2 as acknowledged in its buffer and, after its timer expires, retransmits only packet 0](img/improvement_2.PNG)
+<img src="img/improvement_2.PNG" alt="Sender marks packets 1 and 2 as acknowledged in its buffer and, after its timer expires, retransmits only packet 0" title="Only send unACKed data" width="250" height="250"/>
 
 The result: only the packet that actually needs it gets resent.
 
