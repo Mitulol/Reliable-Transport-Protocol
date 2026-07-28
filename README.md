@@ -24,17 +24,17 @@ The project includes both a **sender** (`wSender`) and a **receiver** (`wReceive
 
 Packet 0 is lost in transit, but packets 1 and 2 both arrive safely:
 
-![Sender window holding packets 0, 1, 2; packet 0 is dropped in transit while packets 1 and 2 successfully reach the receiver window](rtp-diagrams/sliding_window_loss.png)
+![Sender window holding packets 0, 1, 2; packet 0 is dropped in transit while packets 1 and 2 successfully reach the receiver window](img/base_case.PNG)
 
 Because baseline `wReceiver` only sends *cumulative* ACKs, it can't say "I got 1 and 2" — every ACK it sends still just says "I'm waiting on 0." The sender sees no forward progress, its timer fires, and it retransmits **all three** packets — even though 1 and 2 already arrived safely.
 
 `wReceiverOpt` fixes this by ACKing packets individually instead of cumulatively:
 
-![Receiver individually ACKs packet 1 and packet 2 with their own sequence numbers, rather than one cumulative ACK](rtp-diagrams/individual_acks.png)
+![Receiver individually ACKs packet 1 and packet 2 with their own sequence numbers, rather than one cumulative ACK](img/improvement.PNG)
 
 `wSenderOpt` tracks these per-packet ACKs and maintains an independent timer for each packet in the window, so a timeout on packet 0 no longer drags 1 and 2 down with it:
 
-![Sender marks packets 1 and 2 as acknowledged in its buffer and, after its timer expires, retransmits only packet 0](rtp-diagrams/selective_retransmit.png)
+![Sender marks packets 1 and 2 as acknowledged in its buffer and, after its timer expires, retransmits only packet 0](img/improvement_2.PNG)
 
 The result: only the packet that actually needs it gets resent.
 
